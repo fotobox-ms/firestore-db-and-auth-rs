@@ -169,9 +169,9 @@ struct GoogleRESTApiErrorWrapper {
 /// - response: The http requests response. Must be mutable, because the contained value will be extracted in an error case
 /// - context: A function that will be called in an error case that returns a context string
 pub(crate) fn extract_google_api_error(
-    response: reqwest::blocking::Response,
+    response: reqwest::Response,
     context: impl Fn() -> String,
-) -> Result<reqwest::blocking::Response> {
+) -> Result<reqwest::Response> {
     if response.status() == 200 {
         return Ok(response);
     }
