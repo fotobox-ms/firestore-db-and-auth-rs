@@ -12,6 +12,7 @@ pub mod users;
 
 #[cfg(feature = "rocket_support")]
 pub mod rocket;
+mod http2;
 
 // Forward declarations
 pub use credentials::Credentials;

@@ -361,6 +361,7 @@ pub mod user {
 }
 
 pub mod session_cookie {
+    use crate::http2;
     use super::*;
 
     pub static GOOGLE_OAUTH2_URL: &str = "https://accounts.google.com/o/oauth2/token";
@@ -430,7 +431,7 @@ pub mod session_cookie {
         let assertion = crate::jwt::session_cookie::create_jwt_encoded(credentials, duration).await?;
 
         // Request Google Oauth2 to retrieve the access token in order to create a session cookie
-        let client = reqwest::Client::new();
+        let client = http2::Client::new();
         let response_oauth2: Oauth2ResponseDTO = client
             .post(GOOGLE_OAUTH2_URL)
             .form(&[

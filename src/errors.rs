@@ -6,6 +6,7 @@ use std::fmt;
 use reqwest;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
+use crate::http2;
 
 /// A result type that uses [`FirebaseError`] as an error type
 pub type Result<T> = std::result::Result<T, FirebaseError>;
@@ -169,9 +170,9 @@ struct GoogleRESTApiErrorWrapper {
 /// - response: The http requests response. Must be mutable, because the contained value will be extracted in an error case
 /// - context: A function that will be called in an error case that returns a context string
 pub(crate) fn extract_google_api_error(
-    response: reqwest::Response,
+    response: http2::Response,
     context: impl Fn() -> String,
-) -> Result<reqwest::Response> {
+) -> Result<http2::Response> {
     if response.status() == 200 {
         return Ok(response);
     }
