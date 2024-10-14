@@ -15,7 +15,7 @@ rust-version = "1.64"
 [dependencies]
 bytes = "1.1"
 cache_control = "0.2"
-reqwest = { version = "0.12.7", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.11.16", default-features = false, features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
@@ -42,7 +42,7 @@ features = ["external_doc", "rocket_support"]
 
 [features]
 default = ["rustls-tls", "unstable"]
-blocking = []
+blocking = ["reqwest/blocking"]
 rocket_support = ["rocket"]
 rustls-tls = ["reqwest/rustls-tls"]
 default-tls = ["reqwest/default-tls"]
@@ -50,6 +50,7 @@ native-tls = ["reqwest/native-tls"]
 native-tls-vendored = ["reqwest/native-tls-vendored"]
 unstable = []
 external_doc = []
+wasm32 = ["ring/wasm32_unknown_unknown_js", "ring/std", "tokio/rt", "tokio/sync"]
 
 [[example]]
 name = "create_read_write_document"

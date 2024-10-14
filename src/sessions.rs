@@ -20,9 +20,11 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 pub mod user {
+    use async_trait::async_trait;
     use super::*;
     use crate::dto::{OAuthResponse, SignInWithIdpRequest};
     use credentials::Credentials;
+    use crate::http2::Client;
 
     #[inline]
     fn token_endpoint(v: &str) -> String {
@@ -86,14 +88,11 @@ pub mod user {
         pub client: reqwest::Client,
     }
 
-    #[async_trait::async_trait]
+    #[cfg_attr(target_family = "wasm", async_trait(?Send))]
+    #[cfg_attr(not(target_family = "wasm"), async_trait)]
     impl super::FirebaseAuthBearer for Session {
         fn project_id(&self) -> &str {
             &self.project_id_
-        }
-
-        async fn access_token_unchecked(&self) -> String {
-            self.access_token_.read().await.clone()
         }
 
         /// Returns the current access token.
@@ -107,7 +106,7 @@ pub mod user {
 
             if is_expired(&jwt, 0).unwrap() {
                 // Unwrap: the token is always valid at this point
-                if let Ok(response) = get_new_access_token(&self.api_key, &jwt).await {
+                if let Ok(response) = get_new_access_token(&self.client, &self.api_key, &jwt).await {
                     *jwt = response.id_token.clone();
                     return response.id_token;
                 } else {
@@ -119,6 +118,10 @@ pub mod user {
             jwt.clone()
         }
 
+        async fn access_token_unchecked(&self) -> String {
+            self.access_token_.read().await.clone()
+        }
+
         fn client(&self) -> &reqwest::Client {
             &self.client
         }
@@ -126,15 +129,15 @@ pub mod user {
 
     /// Gets a new access token via an api_key and a refresh_token.
     async fn get_new_access_token(
+        client: &Client,
         api_key: &str,
         refresh_token: &str,
     ) -> Result<RefreshTokenToAccessTokenResponse, FirebaseError> {
         let request_body = vec![("grant_type", "refresh_token"), ("refresh_token", refresh_token)];
 
         let url = refresh_to_access_endpoint(api_key);
-        let client = reqwest::Client::new();
         let response = client.post(&url).form(&request_body).send().await?;
-        Ok(response.json().await?)
+        Ok(response.json::<RefreshTokenToAccessTokenResponse>().await?)
     }
 
     #[allow(non_snake_case)]
@@ -235,15 +238,16 @@ pub mod user {
             credentials: &Credentials,
             refresh_token: &str,
         ) -> Result<Session, FirebaseError> {
+            let client = Client::new();
             let r: RefreshTokenToAccessTokenResponse =
-                get_new_access_token(&credentials.api_key, refresh_token).await?;
+                get_new_access_token(&client, &credentials.api_key, refresh_token).await?;
             Ok(Session {
                 user_id: r.user_id,
                 access_token_: Arc::new(RwLock::new(r.id_token)),
                 refresh_token: Some(r.refresh_token),
                 project_id_: credentials.project_id.to_owned(),
                 api_key: credentials.api_key.clone(),
-                client: reqwest::Client::new(),
+                client: client,
             })
         }
 
@@ -432,17 +436,23 @@ pub mod session_cookie {
 
         // Request Google Oauth2 to retrieve the access token in order to create a session cookie
         let client = http2::Client::new();
-        let response_oauth2: Oauth2ResponseDTO = client
+
+        let _res_oauth = client
             .post(GOOGLE_OAUTH2_URL)
             .form(&[
                 ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
                 ("assertion", &assertion),
             ])
-            .send()?
-            .json()?;
+            .send();
+
+        #[cfg(feature = "blocking")]
+        let response_oauth2: Oauth2ResponseDTO = _res_oauth?.json()?;
+
+        #[cfg(not(feature = "blocking"))]
+        let response_oauth2: Oauth2ResponseDTO = _res_oauth.await?.json().await?;
 
         // Create a session cookie with the access token previously retrieved
-        let response_session_cookie_json: CreateSessionCookieResponseDTO = client
+        let _res_cookie = client
             .post(&identitytoolkit_url(&credentials.project_id))
             .bearer_auth(&response_oauth2.access_token)
             .json(&SessionLoginDTO {
@@ -450,8 +460,13 @@ pub mod session_cookie {
                 valid_duration: duration.num_seconds() as u64,
                 tenant_id: None,
             })
-            .send()?
-            .json()?;
+            .send();
+
+        #[cfg(feature = "blocking")]
+        let response_session_cookie_json: CreateSessionCookieResponseDTO = _res_cookie?.json()?;
+
+        #[cfg(not(feature = "blocking"))]
+        let response_session_cookie_json: CreateSessionCookieResponseDTO = _res_cookie.await?.json().await?;
 
         Ok(response_session_cookie_json.session_cookie_jwk)
     }
@@ -467,6 +482,8 @@ pub mod service_account {
     use chrono::Duration;
     use std::cell::RefCell;
     use std::ops::Deref;
+    use async_trait::async_trait;
+    use crate::http2;
 
     /// Service account session
     #[derive(Clone, Debug)]
@@ -479,7 +496,8 @@ pub mod service_account {
         access_token_: Arc<RwLock<String>>,
     }
 
-    #[async_trait::async_trait]
+    #[cfg_attr(target_family = "wasm", async_trait(?Send))]
+    #[cfg_attr(not(target_family = "wasm"), async_trait)]
     impl super::FirebaseAuthBearer for Session {
         fn project_id(&self) -> &str {
             &self.credentials.project_id

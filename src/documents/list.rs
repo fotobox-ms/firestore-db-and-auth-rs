@@ -6,7 +6,8 @@ use futures::{
     task::{Context, Poll},
     Future,
 };
-use std::boxed::Box;
+
+use std::sync::Arc;
 
 /// List all documents of a given collection.
 ///
@@ -44,15 +45,15 @@ use std::boxed::Box;
 pub fn list<T, AUTH>(
     auth: &AUTH,
     collection_id: impl Into<String>,
-) -> Pin<Box<dyn Stream<Item = Result<(T, dto::Document)>> + Send>>
+) -> impl Stream<Item=Result<(T, dto::Document)>>
 where
-    for<'b> T: Deserialize<'b> + 'static,
-    AUTH: FirebaseAuthBearer + Clone + Send + Sync + 'static,
+        for<'b> T: Deserialize<'b> + 'static,
+        AUTH: FirebaseAuthBearer + Clone + Send + Sync + 'static,
 {
     let auth = auth.clone();
     let collection_id = collection_id.into();
 
-    Box::pin(stream::unfold(
+    stream::unfold(
         ListInner {
             url: firebase_url(auth.project_id(), &collection_id),
             auth,
@@ -116,7 +117,7 @@ where
                 )),
             }
         },
-    ))
+    )
 }
 
 async fn get_new_data<'a>(

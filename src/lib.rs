@@ -14,6 +14,7 @@ pub mod users;
 pub mod rocket;
 mod http2;
 
+use async_trait::async_trait;
 // Forward declarations
 pub use credentials::Credentials;
 pub use jwt::JWKSet;
@@ -27,7 +28,8 @@ pub use sessions::user::Session as UserSession;
 /// Firestore document methods in [`crate::documents`] expect an object that implements this `FirebaseAuthBearer` trait.
 ///
 /// Implement this trait for your own data structure and provide the Firestore project id and a valid access token.
-#[async_trait::async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 pub trait FirebaseAuthBearer {
     /// Return the project ID. This is required for the firebase REST API.
     fn project_id(&self) -> &str;

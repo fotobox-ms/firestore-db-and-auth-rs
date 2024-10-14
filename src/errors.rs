@@ -169,7 +169,7 @@ struct GoogleRESTApiErrorWrapper {
 /// Arguments:
 /// - response: The http requests response. Must be mutable, because the contained value will be extracted in an error case
 /// - context: A function that will be called in an error case that returns a context string
-pub(crate) fn extract_google_api_error(
+pub(crate) async fn extract_google_api_error(
     response: http2::Response,
     context: impl Fn() -> String,
 ) -> Result<http2::Response> {
@@ -177,9 +177,17 @@ pub(crate) fn extract_google_api_error(
         return Ok(response);
     }
 
+    let status = response.status().clone();
+
+    #[cfg(feature = "blocking")]
+    let res_text = response.text()?;
+
+    #[cfg(not(feature = "blocking"))]
+    let res_text = response.text().await?;
+
     Err(extract_google_api_error_intern(
-        response.status().clone(),
-        response.text()?,
+        status,
+        res_text,
         context,
     ))
 }
